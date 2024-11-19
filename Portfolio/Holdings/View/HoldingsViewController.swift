@@ -11,13 +11,16 @@ import UIKit
 class HoldingsViewController: UIViewController {
     
     // MARK: - UI Components
-    
+    private var viewModel:HoldingsViewModel!
     private let containerView: UIView = {
         let view = UIView()
         view.backgroundColor = .white
         return view
     }()
     
+    private var holdingsSummaryView:HoldingsSummaryView!
+    
+    private var holdingsSummaryViewHeightConstraint:NSLayoutConstraint!
     private let stackView: UIStackView = {
         let stackView = UIStackView()
         stackView.axis = .horizontal
@@ -31,6 +34,7 @@ class HoldingsViewController: UIViewController {
         let button = UIButton(type: .system)
         button.setTitle("POSITONS", for: .normal)
         button.setTitleColor(.gray, for: .normal)
+        button.titleLabel?.font = .boldSystemFont(ofSize: 16)
         button.backgroundColor = .white
         button.layer.cornerRadius = 8
         return button
@@ -41,6 +45,7 @@ class HoldingsViewController: UIViewController {
         button.setTitle("HOLDINGS", for: .normal)
         button.setTitleColor(.black, for: .normal)
         button.backgroundColor = .white
+        button.titleLabel?.font = .boldSystemFont(ofSize: 16)
         button.layer.cornerRadius = 8
         return button
     }()
@@ -59,10 +64,10 @@ class HoldingsViewController: UIViewController {
     }()
     
     private let tableView: UITableView = {
-           let tableView = UITableView()
-           tableView.register(UITableViewCell.self, forCellReuseIdentifier: "cell")
-           return tableView
-       }()
+        let tableView = UITableView()
+        tableView.register(HoldingsTableViewCell.self, forCellReuseIdentifier: HoldingsTableViewCell.identifier)
+        return tableView
+    }()
     
     // MARK: - Properties
     
@@ -72,16 +77,34 @@ class HoldingsViewController: UIViewController {
     
     override func viewDidLoad() {
         super.viewDidLoad()
+        self.viewModel = HoldingsViewModel()
         setupUI()
         setupConstraints()
         addActions()
+        self.viewModel.refreshData = {
+            self.tableView.reloadData()
+            self.holdingsSummaryView.configureAllSumValues(currentValue: self.viewModel.currentValue, totalInvestment: self.viewModel.totalInvestment, todaysProfitLoss: self.viewModel.todaysPNL, profitAndLoss: self.viewModel.totalPNL)
+        }
+        self.holdingsSummaryView.isExpandedDelegate = {[weak self] isExpanded in
+            if isExpanded {
+                self?.holdingsSummaryViewHeightConstraint.constant = 150
+                self?.holdingsSummaryView.separatorView.alpha = 1
+            }else{
+                self?.holdingsSummaryViewHeightConstraint.constant = 50
+                self?.holdingsSummaryView.separatorView.alpha = 0
+            }
+            
+        }
     }
     
     // MARK: - Setup Methods
     
     private func setupUI() {
         self.view.backgroundColor = UIColor.customBlue
-        
+        self.holdingsSummaryView = HoldingsSummaryView()
+        tableView.delegate = self
+        tableView.dataSource = self
+        tableView.reloadData()
         // Add buttons to stack view
         stackView.addArrangedSubview(positionsButton)
         stackView.addArrangedSubview(holdingsButton)
@@ -90,17 +113,25 @@ class HoldingsViewController: UIViewController {
         containerView.addSubview(stackView)
         containerView.addSubview(separator)
         containerView.addSubview(indicatorView)
-        
+        containerView.addSubview(tableView)
+        containerView.addSubview(holdingsSummaryView)
+        containerView.bringSubviewToFront(holdingsSummaryView)
         // Add container view to the main view
         self.view.addSubview(containerView)
+        self.holdingsSummaryView.layer.borderWidth = 1
+        self.holdingsSummaryView.layer.cornerRadius = 8
+        self.holdingsSummaryView.layer.borderColor = UIColor.gray.cgColor
     }
+
     
     private func setupConstraints() {
         containerView.translatesAutoresizingMaskIntoConstraints = false
         stackView.translatesAutoresizingMaskIntoConstraints = false
         separator.translatesAutoresizingMaskIntoConstraints = false
         indicatorView.translatesAutoresizingMaskIntoConstraints = false
-        
+        tableView.translatesAutoresizingMaskIntoConstraints = false
+        holdingsSummaryView.translatesAutoresizingMaskIntoConstraints = false
+
         indicatorCenterXConstraint = indicatorView.centerXAnchor.constraint(equalTo: holdingsButton.centerXAnchor)
         
         NSLayoutConstraint.activate([
@@ -112,8 +143,8 @@ class HoldingsViewController: UIViewController {
             
             // Stack view constraints
             stackView.topAnchor.constraint(equalTo: containerView.topAnchor, constant: 20),
-            stackView.leadingAnchor.constraint(equalTo: containerView.leadingAnchor, constant: 20),
-            stackView.trailingAnchor.constraint(equalTo: containerView.trailingAnchor, constant: -20),
+            stackView.leadingAnchor.constraint(equalTo: containerView.leadingAnchor, constant: 0),
+            stackView.trailingAnchor.constraint(equalTo: containerView.trailingAnchor, constant: 0),
             stackView.heightAnchor.constraint(equalToConstant: 50),
             
             // Separator constraints
@@ -125,9 +156,21 @@ class HoldingsViewController: UIViewController {
             // Indicator constraints
             indicatorView.bottomAnchor.constraint(equalTo: stackView.bottomAnchor),
             indicatorView.heightAnchor.constraint(equalToConstant: 2),
-            indicatorView.widthAnchor.constraint(equalTo: positionsButton.widthAnchor),
-            indicatorCenterXConstraint!
+            indicatorView.widthAnchor.constraint(equalToConstant: 110),
+            indicatorCenterXConstraint!,
+            
+            tableView.topAnchor.constraint(equalTo: separator.bottomAnchor, constant: 0),
+            tableView.leadingAnchor.constraint(equalTo: containerView.leadingAnchor, constant: 0),
+            tableView.trailingAnchor.constraint(equalTo: containerView.trailingAnchor, constant: 0),
+            tableView.bottomAnchor.constraint(equalTo: holdingsSummaryView.topAnchor, constant: -5),
+            
+            holdingsSummaryView.bottomAnchor.constraint(equalTo: containerView.bottomAnchor, constant: 0),
+            holdingsSummaryView.leadingAnchor.constraint(equalTo: containerView.leadingAnchor, constant: 0),
+            holdingsSummaryView.trailingAnchor.constraint(equalTo: containerView.trailingAnchor, constant: 0),
+            
         ])
+        holdingsSummaryViewHeightConstraint = holdingsSummaryView.heightAnchor.constraint(equalToConstant: 500)
+        holdingsSummaryViewHeightConstraint.isActive = true
     }
     
     private func addActions() {
@@ -138,12 +181,10 @@ class HoldingsViewController: UIViewController {
     // MARK: - Actions
     
     @objc private func holdingsTapped() {
-        print("Holdings tab tapped")
         moveIndicator(to: positionsButton)
     }
     
     @objc private func positionsTapped() {
-        print("Positions tab tapped")
         moveIndicator(to: holdingsButton)
     }
     
@@ -158,4 +199,22 @@ class HoldingsViewController: UIViewController {
             self.view.layoutIfNeeded()
         }
     }
+}
+
+extension HoldingsViewController:UITableViewDataSource,UITableViewDelegate{
+    func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int {
+        return viewModel.holdingsData.count
+    }
+    
+    func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
+        let cell = tableView.dequeueReusableCell(withIdentifier: HoldingsTableViewCell.identifier, for: indexPath) as! HoldingsTableViewCell
+        cell.configure(holding: viewModel.holdingsData[indexPath.row])
+        return cell
+    }
+    
+    func tableView(_ tableView: UITableView, heightForRowAt indexPath: IndexPath) -> CGFloat {
+        return 100
+    }
+
+    
 }
